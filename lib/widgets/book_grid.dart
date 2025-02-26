@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:reader/services/book_service.dart';
 
-class Book {
+class BookGridItem {
   final String title;
-  final String coverImage;
+  final String coverPath;
   final double progress;
 
-  const Book({
+  const BookGridItem({
     required this.title,
-    required this.coverImage,
+    required this.coverPath,
     required this.progress,
   });
 }
@@ -47,7 +48,7 @@ class BookGrid extends StatelessWidget {
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: Image.asset(book.coverImage, fit: BoxFit.cover),
+                  child: Image.asset(book.coverPath ?? 'assets/images/book_cover_not_available.jpg', fit: BoxFit.cover),
                 ),
               ),
             ),
