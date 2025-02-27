@@ -8,6 +8,8 @@ class Book {
   final String? coverPath;
   final String filePath;
   final double progress;
+  final DateTime? lastReadTime;
+  final DateTime createTime;
 
   set setId(int value) {
     id = value;
@@ -20,7 +22,9 @@ class Book {
     this.coverPath,
     required this.filePath,
     this.progress = 0.0,
-  });
+    this.lastReadTime,
+    DateTime? createTime,
+  }) : this.createTime = createTime ?? DateTime.now();
 
   Map<String, dynamic> toMap() {
     return {
@@ -30,6 +34,8 @@ class Book {
       'coverPath': coverPath,
       'filePath': filePath,
       'progress': progress,
+      'lastReadTime': lastReadTime?.millisecondsSinceEpoch,
+      'createTime': createTime.millisecondsSinceEpoch,
     };
   }
 
@@ -41,6 +47,11 @@ class Book {
       coverPath: map['coverPath'],
       filePath: map['filePath'],
       progress: map['progress'],
+      lastReadTime:
+          map['lastReadTime'] != null
+              ? DateTime.fromMillisecondsSinceEpoch(map['lastReadTime'])
+              : null,
+      createTime: DateTime.fromMillisecondsSinceEpoch(map['createTime']),
     );
   }
 }
@@ -61,7 +72,7 @@ class BookService {
     final String path = join(await getDatabasesPath(), 'reader.db');
     _database = await openDatabase(
       path,
-      version: 1,
+      version: 3,
       onCreate: (Database db, int version) async {
         await db.execute(
           'CREATE TABLE books('
@@ -70,9 +81,20 @@ class BookService {
           'author TEXT, '
           'coverPath TEXT, '
           'filePath TEXT, '
-          'progress REAL'
+          'progress REAL, '
+          'lastReadTime INTEGER, '
+          'createTime INTEGER NOT NULL'
           ')',
         );
+      },
+      onUpgrade: (Database db, int oldVersion, int newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute('ALTER TABLE books ADD COLUMN lastReadTime INTEGER');
+        }
+        if (oldVersion < 3) {
+          await db.execute('ALTER TABLE books ADD COLUMN createTime INTEGER DEFAULT ${DateTime.now().millisecondsSinceEpoch}');
+          await db.execute('UPDATE books SET createTime = ${DateTime.now().millisecondsSinceEpoch} WHERE createTime IS NULL');
+        }
       },
     );
   }
@@ -84,7 +106,10 @@ class BookService {
 
   Future<List<Book>> getBooks() async {
     await init();
-    final List<Map<String, dynamic>> maps = await _database!.query('books');
+    final List<Map<String, dynamic>> maps = await _database!.query(
+      'books',
+      orderBy: 'COALESCE(lastReadTime, createTime) DESC',
+    );
     return List.generate(maps.length, (i) => Book.fromMap(maps[i]));
   }
 
@@ -92,7 +117,10 @@ class BookService {
     await init();
     await _database!.update(
       'books',
-      {'progress': progress},
+      {
+        'progress': progress,
+        'lastReadTime': DateTime.now().millisecondsSinceEpoch,
+      },
       where: 'id = ?',
       whereArgs: [id],
     );

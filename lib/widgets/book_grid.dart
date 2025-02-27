@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:reader/services/book_service.dart';
 
@@ -48,7 +50,14 @@ class BookGrid extends StatelessWidget {
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: Image.asset(book.coverPath ?? 'assets/images/book_cover_not_available.jpg', fit: BoxFit.cover),
+                  child:
+                      book.coverPath != null &&
+                              File(book.coverPath!).existsSync()
+                          ? Image.file(File(book.coverPath!), fit: BoxFit.cover)
+                          : Image.asset(
+                            'assets/images/book_cover_not_available.jpg',
+                            fit: BoxFit.cover,
+                          ),
                 ),
               ),
             ),

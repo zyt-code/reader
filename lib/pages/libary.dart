@@ -1,11 +1,10 @@
 import 'dart:typed_data';
 
-import 'package:epubx/epubx.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:reader/services/book_service.dart';
-import 'package:reader/pages/reader.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:reader/utils/epub_utils.dart';
 import 'dart:io';
 
 import 'package:reader/widgets/book_grid.dart';
@@ -35,43 +34,6 @@ class _LibaryPageState extends State<LibaryPage> {
       books.addAll(bookList);
       _isLoading = false;
     });
-  }
-
-  /// epubx 解析 epub 文件
-  Future<EpubBook> parseEpub(String filePath) async {
-    try {
-      // 读取文件
-      final file = File(filePath);
-      final Uint8List bytes = await file.readAsBytes();
-
-      // 解析 EPUB
-      final EpubBook epubBook = await EpubReader.readBook(bytes);
-
-      // 获取元数据
-      String? title = epubBook.Title;
-      String? author = epubBook.Author;
-      // List<EpubTextContentFile>? chapters = epubBook.Chapters;
-      print("书名: $title");
-      print("作者: $author");
-
-      // 获取封面图片
-      if (epubBook.CoverImage != null) {
-        print("封面获取成功！");
-        // 你可以使用 Image.memory(Uint8List.fromList(epubBook.CoverImage!))
-      } else {
-        print("没有封面图片");
-      }
-
-      // // 获取章节信息
-      // if (chapters != null) {
-      //   print("章节数: ${chapters.length}");
-      //   print("第一章标题: ${chapters.first.Title}");
-      // }
-      return epubBook;
-    } catch (e) {
-      print("EPUB 解析失败: $e");
-      return EpubBook();
-    }
   }
 
   @override
@@ -114,6 +76,12 @@ class _LibaryPageState extends State<LibaryPage> {
                           await booksDir.create(recursive: true);
                         }
 
+                        // 创建封面图片目录
+                        final coversDir = Directory('${appDir.path}/covers');
+                        if (!await coversDir.exists()) {
+                          await coversDir.create(recursive: true);
+                        }
+
                         // 将文件复制到应用文档目录
                         final fileName = file.name;
                         final newFilePath = '${booksDir.path}/$fileName';
@@ -124,20 +92,33 @@ class _LibaryPageState extends State<LibaryPage> {
                         await bookService.init();
 
                         String title = fileName.replaceAll('.epub', '');
-                        String author = "";
+                        String coverPath =
+                            'assets/images/book_cover_not_available.jpg';
 
                         // epubx 解析文件
-                        final epubFile = await parseEpub(newFilePath);
-                        print("epub title: ${epubFile.Title}");
+                        final epubFile = await EpubUtils.parseEpub(newFilePath);
+
+                        // 保存封面图片
+                        if (epubFile.coverImage != null) {
+                          final coverFileName =
+                              '${DateTime.now().millisecondsSinceEpoch}.jpg';
+                          final coverFile = File(
+                            '${coversDir.path}/$coverFileName',
+                          );
+                          await coverFile.writeAsBytes(epubFile.coverImage!);
+                          coverPath = coverFile.path;
+                        }
 
                         // 创建新的 Book 对象
                         final book = Book(
-                          title: title,
-                          author: author,
+                          title: epubFile.title ?? title,
+                          author: epubFile.author,
                           filePath: newFilePath,
-                          coverPath:
-                              'assets/images/book_cover_not_available.jpg',
+                          coverPath: coverPath,
+                          lastReadTime: DateTime.now(),
+                          createTime: DateTime.now(),
                         );
+                        print("epub data: ${epubFile.toString()}");
 
                         // 保存到数据库
                         final bookId = await bookService.insertBook(book);

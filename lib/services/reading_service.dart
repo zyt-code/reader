@@ -23,7 +23,7 @@ class ReadingService {
   Future<void> _checkAndUpdateStreak() async {
     final String? lastReadDate = _prefs.getString(_keyLastReadDate);
     final DateTime now = DateTime.now();
-    final String today = '${now.year}-${now.month}-${now.day}';
+    final String today = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 
     if (lastReadDate == null) {
       await _prefs.setString(_keyLastReadDate, today);
