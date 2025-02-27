@@ -16,10 +16,17 @@ class ReaderApp extends StatefulWidget {
 
 class _ReaderAppState extends State<ReaderApp> {
   int _selectedIndex = 0;
+  bool _showNavBar = true;
 
-  final List<Widget> _pages = [
+  List<Widget> get _pages => [
     const HomePage(),
-    const LibaryPage(),
+    LibaryPage(
+      onSelectionModeChange: (onSelection) {
+        setState(() {
+          _showNavBar = !onSelection;
+        });
+      },
+    ),
     const SearchPage(),
   ];
 
@@ -64,32 +71,35 @@ class _ReaderAppState extends State<ReaderApp> {
       themeMode: ThemeMode.system,
       home: Scaffold(
         body: _pages[_selectedIndex],
-        bottomNavigationBar: BottomNavigationBar(
-          items: const <BottomNavigationBarItem>[
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home_outlined, size: 28),
-              activeIcon: Icon(Icons.home, size: 28),
-              label: '',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.library_books_outlined, size: 28),
-              activeIcon: Icon(Icons.library_books, size: 28),
-              label: '',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.search_outlined, size: 28),
-              activeIcon: Icon(Icons.search, size: 28),
-              label: '',
-            ),
-          ],
-          currentIndex: _selectedIndex,
-          onTap: _onItemTapped,
-          type: BottomNavigationBarType.fixed,
-          selectedItemColor: Theme.of(context).colorScheme.primary,
-          unselectedItemColor: Theme.of(context).colorScheme.onSurface,
-          backgroundColor: Theme.of(context).colorScheme.surface,
-          elevation: 0,
-        ),
+        bottomNavigationBar:
+            _showNavBar
+                ? BottomNavigationBar(
+                  items: const <BottomNavigationBarItem>[
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.home_outlined, size: 28),
+                      activeIcon: Icon(Icons.home, size: 28),
+                      label: '',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.library_books_outlined, size: 28),
+                      activeIcon: Icon(Icons.library_books, size: 28),
+                      label: '',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.search_outlined, size: 28),
+                      activeIcon: Icon(Icons.search, size: 28),
+                      label: '',
+                    ),
+                  ],
+                  currentIndex: _selectedIndex,
+                  onTap: _onItemTapped,
+                  type: BottomNavigationBarType.fixed,
+                  selectedItemColor: Theme.of(context).colorScheme.primary,
+                  unselectedItemColor: Theme.of(context).colorScheme.onSurface,
+                  backgroundColor: Theme.of(context).colorScheme.surface,
+                  elevation: 0,
+                )
+                : null,
       ),
     );
   }

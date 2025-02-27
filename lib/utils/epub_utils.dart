@@ -49,7 +49,7 @@ class EpubUtils {
     final files = {for (var f in archive.files) f.name: f.content};
 
     // 修改这里：将 Uint8List 转换为 String
-    final containerXmlBytes = files['META-INF/container.xml'] as Uint8List?;
+    final containerXmlBytes = files['META-INF/container.xml'];
     if (containerXmlBytes == null) throw Exception('EPUB 缺少 container.xml');
     final containerXml = const Utf8Decoder().convert(containerXmlBytes);
 
@@ -61,7 +61,7 @@ class EpubUtils {
     if (opfPath == null) throw Exception('无法找到 OPF 文件路径');
 
     // 同样使用 UTF-8 解码 OPF 文件内容
-    final opfContentBytes = files[opfPath] as Uint8List?;
+    final opfContentBytes = files[opfPath];
     if (opfContentBytes == null) throw Exception('找不到 OPF 文件');
     final opfContent = const Utf8Decoder().convert(opfContentBytes);
 
@@ -152,20 +152,16 @@ class EpubUtils {
         );
 
     // 方法2：查找 id 包含 "cover" 的项
-    if (coverItem == null) {
-      coverItem = manifest.findElements("item").firstWhereOrNull(
+    coverItem ??= manifest.findElements("item").firstWhereOrNull(
             (e) => e.getAttribute("id")?.toLowerCase().contains("cover") ?? false,
           );
-    }
 
     // 方法3：查找媒体类型为图片且文件名包含 "cover" 的项
-    if (coverItem == null) {
-      coverItem = manifest.findElements("item").firstWhereOrNull((e) {
+    coverItem ??= manifest.findElements("item").firstWhereOrNull((e) {
         final mediaType = e.getAttribute("media-type") ?? "";
         final href = e.getAttribute("href")?.toLowerCase() ?? "";
         return mediaType.startsWith("image/") && href.contains("cover");
       });
-    }
 
     // 方法4：查找元数据中的封面引用
     if (coverItem == null) {
@@ -183,11 +179,9 @@ class EpubUtils {
     }
 
     // 方法5：如果还是没找到，尝试获取第一个图片文件
-    if (coverItem == null) {
-      coverItem = manifest.findElements("item").firstWhereOrNull(
+    coverItem ??= manifest.findElements("item").firstWhereOrNull(
             (e) => (e.getAttribute("media-type") ?? "").startsWith("image/"),
           );
-    }
 
     return coverItem?.getAttribute("href");
   }
