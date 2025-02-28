@@ -100,33 +100,31 @@ class _LibaryPageState extends State<LibaryPage> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      '书库',
-                      style: Theme.of(context).textTheme.headlineMedium
-                          ?.copyWith(fontWeight: FontWeight.bold),
-                    ),
                     if (_isSelectionMode)
-                      Row(
-                        children: [
-                          TextButton(
-                            onPressed: () {
-                              _updateSelectedBooks(
-                                _selectedBooks.length != books.length,
-                              );
-                            },
-                            child: Text(
-                              _selectedBooks.length == books.length
-                                  ? '取消全选'
-                                  : '全选',
-                            ),
-                          ),
-                          TextButton(
-                            onPressed: () {
-                              _updateSelectionMode(false);
-                            },
-                            child: const Text('取消'),
-                          ),
-                        ],
+                      TextButton(
+                        onPressed: () {
+                          _updateSelectedBooks(
+                            _selectedBooks.length != books.length,
+                          );
+                        },
+                        child: Text(
+                          _selectedBooks.length == books.length
+                              ? '取消全选'
+                              : '全选',
+                        ),
+                      )
+                    else
+                      Text(
+                        '书库',
+                        style: Theme.of(context).textTheme.headlineMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                    if (_isSelectionMode)
+                      TextButton(
+                        onPressed: () {
+                          _updateSelectionMode(false);
+                        },
+                        child: const Text('取消'),
                       )
                     else
                       IconButton(
