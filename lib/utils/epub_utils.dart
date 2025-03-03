@@ -4,6 +4,7 @@ import 'package:archive/archive.dart';
 import 'package:xml/xml.dart';
 import 'package:collection/collection.dart';
 import 'dart:convert';
+import 'package:html/parser.dart' as html;
 
 /// EPUB 书籍元数据
 class EpubMetadata {
@@ -35,6 +36,17 @@ class EpubMetadata {
   }
 }
 
+/// EPUB 章节内容
+class EpubChapter {
+  final String title;
+  final String content;
+
+  EpubChapter({
+    required this.title,
+    required this.content,
+  });
+}
+
 /// EPUB 解析工具类
 class EpubUtils {
   /// 解析 EPUB 文件
@@ -48,7 +60,6 @@ class EpubUtils {
     final archive = ZipDecoder().decodeBytes(bytes);
     final files = {for (var f in archive.files) f.name: f.content};
 
-    // 修改这里：将 Uint8List 转换为 String
     final containerXmlBytes = files['META-INF/container.xml'];
     if (containerXmlBytes == null) throw Exception('EPUB 缺少 container.xml');
     final containerXml = const Utf8Decoder().convert(containerXmlBytes);
@@ -60,12 +71,10 @@ class EpubUtils {
     );
     if (opfPath == null) throw Exception('无法找到 OPF 文件路径');
 
-    // 同样使用 UTF-8 解码 OPF 文件内容
     final opfContentBytes = files[opfPath];
     if (opfContentBytes == null) throw Exception('找不到 OPF 文件');
     final opfContent = const Utf8Decoder().convert(opfContentBytes);
 
-    // 解析元数据
     final xmlDoc = XmlDocument.parse(opfContent);
     final metadata = xmlDoc.findAllElements("metadata").first;
     final title = _getXmlTagContent(metadata, 'dc:title');
@@ -75,7 +84,6 @@ class EpubUtils {
     final language = _getXmlTagContent(metadata, 'dc:language');
     final identifier = _getXmlTagContent(metadata, 'dc:identifier');
 
-    // 获取封面图片
     Uint8List? coverImage;
     final coverPath = _findCoverPath(opfContent);
     if (coverPath != null) {
@@ -86,7 +94,6 @@ class EpubUtils {
       }
     }
 
-    // 获取章节列表
     final chapters = _getChapterPaths(xmlDoc);
 
     return EpubMetadata(
@@ -99,6 +106,52 @@ class EpubUtils {
       coverImage: coverImage,
       chapters: chapters,
     );
+  }
+
+  /// 解析章节内容
+  static Future<List<EpubChapter>> parseChapters(String filePath) async {
+    final file = File(filePath);
+    final bytes = await file.readAsBytes();
+    final archive = ZipDecoder().decodeBytes(bytes);
+    final files = {for (var f in archive.files) f.name: f.content};
+
+    final metadata = await parseEpub(filePath);
+    final List<EpubChapter> chapters = [];
+
+    for (var chapterPath in metadata.chapters) {
+      final chapterBytes = files[chapterPath];
+      if (chapterBytes != null) {
+        final content = const Utf8Decoder().convert(chapterBytes);
+        final document = html.parse(content);
+
+        // 提取标题
+        String? title = document.querySelector('title')?.text ?? '';
+        if (title.isEmpty) {
+          title = document.querySelector('h1')?.text ?? '未命名章节';
+        }
+
+        // 提取正文内容
+        final body = document.body;
+        if (body != null) {
+          // 移除脚本和样式标签
+          body.querySelectorAll('script, style').forEach((element) => element.remove());
+          
+          // 处理段落
+          final paragraphs = body.querySelectorAll('p');
+          final processedContent = paragraphs
+              .map((p) => p.text.trim())
+              .where((text) => text.isNotEmpty)
+              .join('\n\n');
+
+          chapters.add(EpubChapter(
+            title: title,
+            content: processedContent.isEmpty ? body.text : processedContent,
+          ));
+        }
+      }
+    }
+
+    return chapters;
   }
 
   /// 提取 XML 标签内容
@@ -144,26 +197,22 @@ class EpubUtils {
     final xmlDoc = XmlDocument.parse(opfContent);
     final manifest = xmlDoc.findAllElements("manifest").first;
 
-    // 方法1：查找带有 properties="cover-image" 的项
     var coverItem = manifest
         .findElements("item")
         .firstWhereOrNull(
           (e) => e.getAttribute("properties")?.contains("cover-image") ?? false,
         );
 
-    // 方法2：查找 id 包含 "cover" 的项
     coverItem ??= manifest.findElements("item").firstWhereOrNull(
             (e) => e.getAttribute("id")?.toLowerCase().contains("cover") ?? false,
           );
 
-    // 方法3：查找媒体类型为图片且文件名包含 "cover" 的项
     coverItem ??= manifest.findElements("item").firstWhereOrNull((e) {
         final mediaType = e.getAttribute("media-type") ?? "";
         final href = e.getAttribute("href")?.toLowerCase() ?? "";
         return mediaType.startsWith("image/") && href.contains("cover");
       });
 
-    // 方法4：查找元数据中的封面引用
     if (coverItem == null) {
       final metadata = xmlDoc.findAllElements("metadata").first;
       final metaCover = metadata
@@ -178,7 +227,6 @@ class EpubUtils {
       }
     }
 
-    // 方法5：如果还是没找到，尝试获取第一个图片文件
     coverItem ??= manifest.findElements("item").firstWhereOrNull(
             (e) => (e.getAttribute("media-type") ?? "").startsWith("image/"),
           );

@@ -72,7 +72,7 @@ class BookService {
     final String path = join(await getDatabasesPath(), 'reader.db');
     _database = await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: (Database db, int version) async {
         await db.execute(
           'CREATE TABLE books('
@@ -86,6 +86,15 @@ class BookService {
           'createTime INTEGER NOT NULL'
           ')',
         );
+        await db.execute(
+          'CREATE TABLE reading_progress('
+          'id INTEGER PRIMARY KEY AUTOINCREMENT, '
+          'bookId INTEGER NOT NULL, '
+          'chapterIndex INTEGER NOT NULL, '
+          'scrollPosition REAL NOT NULL, '
+          'lastReadTime TEXT NOT NULL'
+          ')',
+        );
       },
       onUpgrade: (Database db, int oldVersion, int newVersion) async {
         if (oldVersion < 2) {
@@ -94,6 +103,17 @@ class BookService {
         if (oldVersion < 3) {
           await db.execute('ALTER TABLE books ADD COLUMN createTime INTEGER DEFAULT ${DateTime.now().millisecondsSinceEpoch}');
           await db.execute('UPDATE books SET createTime = ${DateTime.now().millisecondsSinceEpoch} WHERE createTime IS NULL');
+        }
+        if (oldVersion < 4) {
+          await db.execute(
+            'CREATE TABLE reading_progress('
+            'id INTEGER PRIMARY KEY AUTOINCREMENT, '
+            'bookId INTEGER NOT NULL, '
+            'chapterIndex INTEGER NOT NULL, '
+            'scrollPosition REAL NOT NULL, '
+            'lastReadTime TEXT NOT NULL'
+            ')',
+          );
         }
       },
     );

@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:reader/services/book_service.dart';
+import 'package:reader/services/chapter_service.dart';
 import 'package:reader/pages/reader.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:reader/utils/epub_utils.dart';
@@ -108,9 +109,7 @@ class _LibaryPageState extends State<LibaryPage> {
                           );
                         },
                         child: Text(
-                          _selectedBooks.length == books.length
-                              ? '取消全选'
-                              : '全选',
+                          _selectedBooks.length == books.length ? '取消全选' : '全选',
                         ),
                       )
                     else
@@ -302,8 +301,10 @@ class _LibaryPageState extends State<LibaryPage> {
       String title = fileName.replaceAll('.epub', '');
       String coverPath = 'assets/images/book_cover_not_available.jpg';
 
+      // 解析 EPUB 文件
       final epubFile = await EpubUtils.parseEpub(newFilePath);
-
+      title = epubFile.title ?? title;
+      // 保存封面图片
       if (epubFile.coverImage != null) {
         final coverFileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
         final coverFile = File('${coversDir.path}/$coverFileName');
@@ -311,8 +312,9 @@ class _LibaryPageState extends State<LibaryPage> {
         coverPath = coverFile.path;
       }
 
+      // 创建新的 Book 对象
       final book = Book(
-        title: epubFile.title ?? title,
+        title: title,
         author: epubFile.author,
         filePath: newFilePath,
         coverPath: coverPath,
@@ -320,9 +322,30 @@ class _LibaryPageState extends State<LibaryPage> {
         createTime: DateTime.now(),
       );
 
+      // 保存书籍到数据库
       final bookId = await bookService.insertBook(book);
       book.setId = bookId;
 
+      // 解析并保存章节信息
+      final chapters = await EpubUtils.parseChapters(newFilePath);
+      final chapterService = ChapterService();
+      await chapterService.init();
+
+      // 将章节信息保存到数据库
+      final chapterList =
+          chapters.asMap().entries.map((entry) {
+            return Chapter(
+              bookId: bookId,
+              title: entry.value.title,
+              content: entry.value.content,
+              filePath: newFilePath,
+              chapterIndex: entry.key,
+            );
+          }).toList();
+
+      await chapterService.insertChapters(chapterList);
+
+      // 添加到 books 最前方
       setState(() {
         books.insert(0, book);
       });
