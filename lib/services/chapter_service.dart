@@ -58,36 +58,27 @@ class ChapterService {
     _database = await openDatabase(
       path,
       version: 4,
-      onCreate: (Database db, int version) async {
-        await db.execute(
-          'CREATE TABLE chapters('
-          'id INTEGER PRIMARY KEY AUTOINCREMENT, '
-          'bookId INTEGER NOT NULL, '
-          'title TEXT NOT NULL, '
-          'content TEXT NOT NULL, '
-          'filePath TEXT NOT NULL, '
-          'chapter_index INTEGER NOT NULL, '
-          'FOREIGN KEY (bookId) REFERENCES books(id) ON DELETE CASCADE'
-          ')',
-        );
-      },
-      onUpgrade: (Database db, int oldVersion, int newVersion) async {
-        if (oldVersion < 4) {
-          // 直接创建chapters表，如果表已存在则会自动跳过
-          await db.execute(
-            'CREATE TABLE IF NOT EXISTS chapters('
-            'id INTEGER PRIMARY KEY AUTOINCREMENT, '
-            'bookId INTEGER NOT NULL, '
-            'title TEXT NOT NULL, '
-            'content TEXT NOT NULL, '
-            'filePath TEXT NOT NULL, '
-            'chapter_index INTEGER NOT NULL, '
-            'FOREIGN KEY (bookId) REFERENCES books(id) ON DELETE CASCADE'
-            ')',
-          );
-        }
-      },
+      // 不在这里创建表，因为BookService已经负责创建了
     );
+    
+    // 检查表是否存在，如果不存在则创建
+    final tables = await _database!.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='chapters'"
+    );
+    if (tables.isEmpty) {
+      await _database!.execute(
+        'CREATE TABLE IF NOT EXISTS chapters('
+        'id INTEGER PRIMARY KEY AUTOINCREMENT, '
+        'bookId INTEGER NOT NULL, '
+        'title TEXT NOT NULL, '
+        'content TEXT NOT NULL, '
+        'filePath TEXT NOT NULL, '
+        'chapter_index INTEGER NOT NULL, '
+        'FOREIGN KEY (bookId) REFERENCES books(id) ON DELETE CASCADE'
+        ')',
+      );
+    }
+
   }
 
   Future<void> insertChapters(List<Chapter> chapters) async {

@@ -87,6 +87,17 @@ class BookService {
           ')',
         );
         await db.execute(
+          'CREATE TABLE chapters('
+          'id INTEGER PRIMARY KEY AUTOINCREMENT, '
+          'bookId INTEGER NOT NULL, '
+          'title TEXT NOT NULL, '
+          'content TEXT NOT NULL, '
+          'filePath TEXT NOT NULL, '
+          'chapter_index INTEGER NOT NULL, '
+          'FOREIGN KEY (bookId) REFERENCES books(id) ON DELETE CASCADE'
+          ')',
+        );
+        await db.execute(
           'CREATE TABLE reading_progress('
           'id INTEGER PRIMARY KEY AUTOINCREMENT, '
           'bookId INTEGER NOT NULL, '
