@@ -189,9 +189,12 @@ class EpubUtils {
     final opfContentBytes = _epubFiles[opfPath];
     if (opfContentBytes == null) throw Exception('找不到 OPF 文件');
     final opfContent = const Utf8Decoder().convert(opfContentBytes);
-    
+
     // 获取OPF文件所在的基础目录
-    opfBaseDir = opfPath.contains('/') ? opfPath.substring(0, opfPath.lastIndexOf('/') + 1) : '';
+    opfBaseDir =
+        opfPath.contains('/')
+            ? opfPath.substring(0, opfPath.lastIndexOf('/') + 1)
+            : '';
 
     final xmlDoc = XmlDocument.parse(opfContent);
     final metadata = xmlDoc.findAllElements("metadata").first;
@@ -293,16 +296,21 @@ class EpubUtils {
     print('开始解析章节列表，共有 ${metadata.chapters.length} 个章节');
 
     for (var chapterPath in metadata.chapters) {
-      final normalizedPath = chapterPath.replaceAll('\\', '/').replaceAll('//', '/');
+      final normalizedPath = chapterPath
+          .replaceAll('\\', '/')
+          .replaceAll('//', '/');
       final chapterBytes = files[normalizedPath];
       if (chapterBytes != null) {
         final content = const Utf8Decoder().convert(chapterBytes);
         final document = html.parse(content);
 
         // 提取标题
-        String? title = document.querySelector('title')?.text ?? '';
-        if (title.isEmpty) {
-          title = document.querySelector('h1')?.text ?? '未命名章节';
+        String? title = document.querySelector('h2#title')?.text;
+        if (title == null || title.isEmpty) {
+          title = document.querySelector('title')?.text ?? '';
+          if (title.isEmpty) {
+            title = document.querySelector('h1')?.text ?? '未命名章节';
+          }
         }
 
         // 提取样式信息
@@ -384,8 +392,14 @@ class EpubUtils {
       final item = manifest
           .findElements("item")
           .firstWhereOrNull((e) => e.getAttribute("id") == idRef);
-      
+
       if (item != null) {
+        // 跳过id为'cover'的HTML文件，只保留封面图片
+        if (item.getAttribute("id") == "cover") {
+          print('跳过封面HTML文件: ${item.getAttribute("href")}');
+          continue;
+        }
+
         final path = item.getAttribute("href");
         if (path != null) {
           final fullPath = opfDir.isEmpty ? path : "$opfDir/$path";

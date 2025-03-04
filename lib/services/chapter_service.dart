@@ -1,3 +1,4 @@
+import 'package:reader/services/database_init_service.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 
@@ -6,6 +7,7 @@ class Chapter {
   final int bookId;
   final String title;
   final String content;
+  final String? styleContent;
   final String filePath;
   final int chapterIndex;
 
@@ -14,6 +16,7 @@ class Chapter {
     required this.bookId,
     required this.title,
     required this.content,
+    this.styleContent,
     required this.filePath,
     required this.chapterIndex,
   });
@@ -24,6 +27,7 @@ class Chapter {
       'bookId': bookId,
       'title': title,
       'content': content,
+      'style_content': styleContent,
       'filePath': filePath,
       'chapter_index': chapterIndex,
     };
@@ -35,6 +39,7 @@ class Chapter {
       bookId: map['bookId'],
       title: map['title'],
       content: map['content'],
+      styleContent: map['style_content'],
       filePath: map['filePath'],
       chapterIndex: map['chapter_index'],
     );
@@ -55,30 +60,10 @@ class ChapterService {
     if (_database != null) return;
 
     final String path = join(await getDatabasesPath(), 'reader.db');
-    _database = await openDatabase(
-      path,
-      version: 4,
-      // 不在这里创建表，因为BookService已经负责创建了
-    );
-    
-    // 检查表是否存在，如果不存在则创建
-    final tables = await _database!.rawQuery(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='chapters'"
-    );
-    if (tables.isEmpty) {
-      await _database!.execute(
-        'CREATE TABLE IF NOT EXISTS chapters('
-        'id INTEGER PRIMARY KEY AUTOINCREMENT, '
-        'bookId INTEGER NOT NULL, '
-        'title TEXT NOT NULL, '
-        'content TEXT NOT NULL, '
-        'filePath TEXT NOT NULL, '
-        'chapter_index INTEGER NOT NULL, '
-        'FOREIGN KEY (bookId) REFERENCES books(id) ON DELETE CASCADE'
-        ')',
-      );
-    }
+    _database = await openDatabase(path, version: 4);
 
+    // 确保表已创建
+    await DatabaseInitService.initTables(_database!);
   }
 
   Future<void> insertChapters(List<Chapter> chapters) async {
@@ -108,6 +93,31 @@ class ChapterService {
 
   Future<void> deleteChaptersByBookId(int bookId) async {
     await init();
-    await _database!.delete('chapters', where: 'bookId = ?', whereArgs: [bookId]);
+    await _database!.delete(
+      'chapters',
+      where: 'bookId = ?',
+      whereArgs: [bookId],
+    );
+  }
+
+  Future<Chapter?> getChapterByIndex(int bookId, int chapterIndex) async {
+    await init();
+    final List<Map<String, dynamic>> maps = await _database!.query(
+      'chapters',
+      where: 'bookId = ? AND chapter_index = ?',
+      whereArgs: [bookId, chapterIndex],
+      limit: 1,
+    );
+    if (maps.isEmpty) return null;
+    return Chapter.fromMap(maps.first);
+  }
+
+  Future<int> getChapterCount(int bookId) async {
+    await init();
+    final result = await _database!.rawQuery(
+      'SELECT COUNT(*) as count FROM chapters WHERE bookId = ?',
+      [bookId],
+    );
+    return Sqflite.firstIntValue(result) ?? 0;
   }
 }

@@ -1,3 +1,4 @@
+import 'package:reader/services/database_init_service.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 
@@ -38,7 +39,8 @@ class ReadingProgress {
 }
 
 class ReadingProgressService {
-  static final ReadingProgressService _instance = ReadingProgressService._internal();
+  static final ReadingProgressService _instance =
+      ReadingProgressService._internal();
   Database? _database;
 
   factory ReadingProgressService() {
@@ -55,32 +57,7 @@ class ReadingProgressService {
       path,
       version: 4,
       onCreate: (Database db, int version) async {
-        await db.execute(
-          'CREATE TABLE reading_progress('
-          'id INTEGER PRIMARY KEY AUTOINCREMENT, '
-          'bookId INTEGER NOT NULL, '
-          'chapterIndex INTEGER NOT NULL, '
-          'scrollPosition REAL NOT NULL, '
-          'lastReadTime TEXT NOT NULL'
-          ')',
-        );
-      },
-      onUpgrade: (Database db, int oldVersion, int newVersion) async {
-        // 检查表是否存在
-        final tables = await db.rawQuery(
-          "SELECT name FROM sqlite_master WHERE type='table' AND name='reading_progress'"
-        );
-        if (tables.isEmpty) {
-          await db.execute(
-            'CREATE TABLE reading_progress('
-            'id INTEGER PRIMARY KEY AUTOINCREMENT, '
-            'bookId INTEGER NOT NULL, '
-            'chapterIndex INTEGER NOT NULL, '
-            'scrollPosition REAL NOT NULL, '
-            'lastReadTime TEXT NOT NULL'
-            ')',
-          );
-        }
+        await DatabaseInitService.initTables(db);
       },
     );
   }

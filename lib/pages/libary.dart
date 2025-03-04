@@ -337,7 +337,8 @@ class _LibaryPageState extends State<LibaryPage> {
             return Chapter(
               bookId: bookId,
               title: entry.value.title,
-              content: entry.value.content,
+              content: entry.value.htmlContent ?? entry.value.content,
+              styleContent: entry.value.styles?.values.join('\n'),
               filePath: newFilePath,
               chapterIndex: entry.key,
             );

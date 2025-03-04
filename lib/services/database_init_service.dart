@@ -1,4 +1,5 @@
 import 'package:sqflite/sqflite.dart';
+import 'package:sqflite/sqlite_api.dart';
 
 class DatabaseInitService {
   static Future<void> initTables(Database db) async {
@@ -21,6 +22,7 @@ class DatabaseInitService {
       'bookId INTEGER NOT NULL, '
       'title TEXT NOT NULL, '
       'content TEXT NOT NULL, '
+      'style_content TEXT, '
       'filePath TEXT NOT NULL, '
       'chapter_index INTEGER NOT NULL, '
       'FOREIGN KEY (bookId) REFERENCES books(id) ON DELETE CASCADE'
