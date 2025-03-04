@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:reader/pages/libary.dart';
 import 'package:reader/pages/home.dart';
 import 'package:reader/pages/search.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  SystemChannels.textInput.invokeMethod('TextInput.hide');
   runApp(const ReaderApp());
 }
 
