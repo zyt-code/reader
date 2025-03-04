@@ -5,6 +5,7 @@ import 'package:xml/xml.dart';
 import 'package:collection/collection.dart';
 import 'dart:convert';
 import 'package:html/parser.dart' as html;
+import 'package:html/dom.dart' as dom;
 
 /// EPUB 书籍元数据
 class EpubMetadata {
@@ -16,6 +17,10 @@ class EpubMetadata {
   final String? identifier;
   final Uint8List? coverImage;
   final List<String> chapters;
+  final List<EpubTocEntry>? tableOfContents; // 目录结构
+  final Map<String, String>? cssStyles; // CSS样式表
+  final String? tocNcxPath; // NCX文件路径
+  final Map<String, String>? guide; // guide信息
 
   EpubMetadata({
     this.title,
@@ -26,13 +31,18 @@ class EpubMetadata {
     this.identifier,
     this.coverImage,
     required this.chapters,
+    this.tableOfContents,
+    this.cssStyles,
+    this.tocNcxPath,
+    this.guide,
   });
 
   @override
   String toString() {
     return 'EpubMetadata{title: $title, author: $author, description: $description, '
         'publisher: $publisher, language: $language, identifier: $identifier, '
-        'chapters size: ${chapters.length}, hasCover: ${coverImage != null}}';
+        'chapters size: ${chapters.length}, hasCover: ${coverImage != null}, '
+        'tocEntries: ${tableOfContents?.length}, cssStyles: ${cssStyles?.length}}';
   }
 }
 
@@ -40,13 +50,117 @@ class EpubMetadata {
 class EpubChapter {
   final String title;
   final String content;
+  final String? htmlContent; // 原始HTML内容
+  final Map<String, String>? styles; // 应用的样式
+  final String? filePath; // 章节文件路径
 
-  EpubChapter({required this.title, required this.content});
+  EpubChapter({
+    required this.title, 
+    required this.content, 
+    this.htmlContent, 
+    this.styles,
+    this.filePath,
+  });
+}
+
+/// EPUB 目录条目
+class EpubTocEntry {
+  final String label; // 目录标题
+  final String? content; // 指向的内容路径
+  final int level; // 目录层级
+  final List<EpubTocEntry> children; // 子目录
+  final String? id; // 条目ID
+  final int? playOrder; // 播放顺序
+
+  EpubTocEntry({
+    required this.label,
+    this.content,
+    required this.level,
+    this.children = const [],
+    this.id,
+    this.playOrder,
+  });
 }
 
 /// EPUB 解析工具类
 class EpubUtils {
   static String opfBaseDir = '';
+  static Map<String, Uint8List> _epubFiles = {}; // 缓存EPUB文件内容
+  static Map<String, String> _cssStyles = {}; // 缓存CSS样式表
+
+  /// 解析CSS样式表文件
+  static Map<String, String> _parseCssFiles(XmlDocument xmlDoc, String opfPath) {
+    final Map<String, String> styles = {};
+    final manifest = xmlDoc.findAllElements("manifest").first;
+    
+    // 查找所有CSS文件
+    final cssItems = manifest.findElements("item").where((item) {
+      final mediaType = item.getAttribute("media-type");
+      return mediaType == "text/css" || 
+             (item.getAttribute("href")?.toLowerCase().endsWith(".css") ?? false);
+    });
+
+    // 解析每个CSS文件
+    for (final cssItem in cssItems) {
+      final href = cssItem.getAttribute("href");
+      if (href != null) {
+        final cssPath = _resolvePath(opfPath, href);
+        final cssBytes = _epubFiles[cssPath];
+        if (cssBytes != null) {
+          final cssContent = const Utf8Decoder().convert(cssBytes);
+          styles[cssPath] = cssContent;
+        }
+      }
+    }
+
+    return styles;
+  }
+
+  /// 解析NCX文件
+  static Future<List<EpubTocEntry>> _parseNcxFile(String ncxPath) async {
+    final ncxBytes = _epubFiles[ncxPath];
+    if (ncxBytes == null) return [];
+
+    final ncxContent = const Utf8Decoder().convert(ncxBytes);
+    final xmlDoc = XmlDocument.parse(ncxContent);
+    final navMap = xmlDoc.findAllElements("navMap").firstOrNull;
+    if (navMap == null) return [];
+
+    List<EpubTocEntry> parseNavPoint(XmlElement navPoint, int level) {
+      final List<EpubTocEntry> entries = [];
+      final label = navPoint.findElements("navLabel")
+          .firstOrNull?.findElements("text")
+          .firstOrNull?.innerText.trim();
+      final content = navPoint.findElements("content")
+          .firstOrNull?.getAttribute("src");
+      final id = navPoint.getAttribute("id");
+      final playOrder = int.tryParse(
+          navPoint.getAttribute("playOrder") ?? "");
+
+      if (label != null) {
+        final children = navPoint.findElements("navPoint")
+            .map((np) => parseNavPoint(np, level + 1))
+            .expand((e) => e)
+            .toList();
+
+        entries.add(EpubTocEntry(
+          label: label,
+          content: content,
+          level: level,
+          children: children,
+          id: id,
+          playOrder: playOrder,
+        ));
+      }
+
+      return entries;
+    }
+
+    return navMap.findElements("navPoint")
+        .map((np) => parseNavPoint(np, 0))
+        .expand((e) => e)
+        .toList();
+  }
 
   /// 解析 EPUB 文件
   static Future<EpubMetadata> parseEpub(String filePath) async {
@@ -57,9 +171,10 @@ class EpubUtils {
 
     final bytes = await file.readAsBytes();
     final archive = ZipDecoder().decodeBytes(bytes);
-    final files = {for (var f in archive.files) f.name: f.content};
+    _epubFiles = {for (var f in archive.files) f.name: f.content};
 
-    final containerXmlBytes = files['META-INF/container.xml'];
+    // 第一步：读取META-INF/container.xml文件
+    final containerXmlBytes = _epubFiles['META-INF/container.xml'];
     if (containerXmlBytes == null) throw Exception('EPUB 缺少 container.xml');
     final containerXml = const Utf8Decoder().convert(containerXmlBytes);
 
@@ -70,7 +185,8 @@ class EpubUtils {
     );
     if (opfPath == null) throw Exception('无法找到 OPF 文件路径');
 
-    final opfContentBytes = files[opfPath];
+    // 第二步：读取解析opf文件
+    final opfContentBytes = _epubFiles[opfPath];
     if (opfContentBytes == null) throw Exception('找不到 OPF 文件');
     final opfContent = const Utf8Decoder().convert(opfContentBytes);
     
@@ -86,17 +202,68 @@ class EpubUtils {
     final language = _getXmlTagContent(metadata, 'dc:language');
     final identifier = _getXmlTagContent(metadata, 'dc:identifier');
 
+    // 解析封面图片
     Uint8List? coverImage;
     final coverPath = _findCoverPath(opfContent);
     if (coverPath != null) {
       final fullCoverPath = _resolvePath(opfPath, coverPath);
-      final coverData = files[fullCoverPath];
+      final coverData = _epubFiles[fullCoverPath];
       if (coverData is Uint8List) {
         coverImage = coverData;
       }
     }
 
+    // 解析章节路径
     final chapters = _getChapterPaths(xmlDoc);
+    
+    // 解析目录文件路径
+    final tocId = xmlDoc.findAllElements("spine").firstOrNull?.getAttribute("toc");
+    String? tocNcxPath;
+    if (tocId != null) {
+      final tocItem = xmlDoc.findAllElements("item")
+          .firstWhereOrNull((e) => e.getAttribute("id") == tocId);
+      if (tocItem != null) {
+        final tocHref = tocItem.getAttribute("href");
+        if (tocHref != null) {
+          tocNcxPath = _resolvePath(opfPath, tocHref);
+        }
+      }
+    } else {
+      // 尝试查找NCX文件
+      final ncxItem = xmlDoc.findAllElements("item")
+          .firstWhereOrNull((e) => 
+              (e.getAttribute("media-type") == "application/x-dtbncx+xml") ||
+              (e.getAttribute("href")?.toLowerCase().endsWith(".ncx") ?? false));
+      if (ncxItem != null) {
+        final ncxHref = ncxItem.getAttribute("href");
+        if (ncxHref != null) {
+          tocNcxPath = _resolvePath(opfPath, ncxHref);
+        }
+      }
+    }
+    
+    // 解析guide信息
+    Map<String, String>? guide;
+    final guideElement = xmlDoc.findAllElements("guide").firstOrNull;
+    if (guideElement != null) {
+      guide = {};
+      for (final reference in guideElement.findElements("reference")) {
+        final type = reference.getAttribute("type");
+        final href = reference.getAttribute("href");
+        if (type != null && href != null) {
+          guide[type] = _resolvePath(opfPath, href);
+        }
+      }
+    }
+    
+    // 第四步：解析CSS样式表文件
+    _cssStyles = _parseCssFiles(xmlDoc, opfPath);
+    
+    // 第三步：解析NCX目录文件
+    List<EpubTocEntry>? tableOfContents;
+    if (tocNcxPath != null) {
+      tableOfContents = await _parseNcxFile(tocNcxPath);
+    }
 
     return EpubMetadata(
       title: title,
@@ -107,6 +274,10 @@ class EpubUtils {
       identifier: identifier,
       coverImage: coverImage,
       chapters: chapters,
+      tableOfContents: tableOfContents,
+      cssStyles: _cssStyles,
+      tocNcxPath: tocNcxPath,
+      guide: guide,
     );
   }
 
@@ -134,6 +305,19 @@ class EpubUtils {
           title = document.querySelector('h1')?.text ?? '未命名章节';
         }
 
+        // 提取样式信息
+        Map<String, String> chapterStyles = {};
+        final styleLinks = document.querySelectorAll('link[rel="stylesheet"]');
+        for (var link in styleLinks) {
+          final href = link.attributes['href'];
+          if (href != null) {
+            final stylePath = _resolvePath(normalizedPath, href);
+            if (_cssStyles.containsKey(stylePath)) {
+              chapterStyles[stylePath] = _cssStyles[stylePath]!;
+            }
+          }
+        }
+
         // 提取正文内容
         final body = document.body;
         if (body != null) {
@@ -152,6 +336,9 @@ class EpubUtils {
             EpubChapter(
               title: title,
               content: processedContent.isEmpty ? body.text : processedContent,
+              htmlContent: content,
+              styles: chapterStyles,
+              filePath: normalizedPath,
             ),
           );
         }
