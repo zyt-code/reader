@@ -25,7 +25,7 @@ class Chapter {
       'title': title,
       'content': content,
       'filePath': filePath,
-      'index': chapterIndex,
+      'chapter_index': chapterIndex,
     };
   }
 
@@ -36,7 +36,7 @@ class Chapter {
       title: map['title'],
       content: map['content'],
       filePath: map['filePath'],
-      chapterIndex: map['index'],
+      chapterIndex: map['chapter_index'],
     );
   }
 }
@@ -92,12 +92,17 @@ class ChapterService {
 
   Future<List<Chapter>> getChaptersByBookId(int bookId) async {
     await init();
+    print('正在查询书籍ID: $bookId 的章节');
     final List<Map<String, dynamic>> maps = await _database!.query(
       'chapters',
       where: 'bookId = ?',
       whereArgs: [bookId],
       orderBy: 'chapter_index ASC',
     );
+    print('数据库查询结果: ${maps.length} 条记录');
+    if (maps.isEmpty) {
+      print('警告：数据库中未找到该书籍的章节数据');
+    }
     return List.generate(maps.length, (i) => Chapter.fromMap(maps[i]));
   }
 
