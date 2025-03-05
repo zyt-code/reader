@@ -313,9 +313,12 @@ class EpubUtils {
           }
         }
 
-        // 提取样式信息
+        // 提取和处理样式信息
         Map<String, String> chapterStyles = {};
         final styleLinks = document.querySelectorAll('link[rel="stylesheet"]');
+        final inlineStyles = document.querySelectorAll('style');
+        
+        // 处理外部样式表
         for (var link in styleLinks) {
           final href = link.attributes['href'];
           if (href != null) {
@@ -325,26 +328,39 @@ class EpubUtils {
             }
           }
         }
+        
+        // 处理内联样式
+        for (var style in inlineStyles) {
+          final styleId = 'inline_${chapterStyles.length}';
+          chapterStyles[styleId] = style.text;
+        }
 
-        // 提取正文内容
+        // 处理正文内容
         final body = document.body;
         if (body != null) {
-          // 移除脚本和样式标签
-          body
-              .querySelectorAll('script, style')
-              .forEach((element) => element.remove());
+          // 移除脚本标签
+          body.querySelectorAll('script').forEach((element) => element.remove());
 
-          // 处理段落
-          final paragraphs = body.querySelectorAll('p');
-          final processedContent = paragraphs
-              .map((p) => p.text.trim())
-              .where((text) => text.isNotEmpty)
-              .join('\n\n');
+          // 保留原始HTML结构，但清理不必要的属性
+          void cleanElement(dom.Element element) {
+            // 保留的属性列表
+            final keepAttributes = ['id', 'class', 'style', 'href', 'src'];
+            element.attributes.removeWhere((key, _) => !keepAttributes.contains(key));
+            element.nodes.whereType<dom.Element>().forEach(cleanElement);
+          }
+          cleanElement(body);
+
+          // 获取处理后的HTML内容
+          final processedHtml = body.outerHtml;
+          
+          // 提取纯文本内容（用于搜索和显示）
+          final textContent = body.text.trim();
+
           chapters.add(
             EpubChapter(
               title: title,
-              content: processedContent.isEmpty ? body.text : processedContent,
-              htmlContent: content,
+              content: textContent,
+              htmlContent: processedHtml,
               styles: chapterStyles,
               filePath: normalizedPath,
             ),

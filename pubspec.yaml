@@ -43,6 +43,7 @@ dependencies:
   xml: ^6.5.0
   collection: ^1.19.1
   html: ^0.15.5
+  flutter_inappwebview: ^6.1.5
 
 dev_dependencies:
   flutter_test:

@@ -80,6 +80,7 @@ class ChapterService {
     print('正在查询书籍ID: $bookId 的章节');
     final List<Map<String, dynamic>> maps = await _database!.query(
       'chapters',
+      distinct: true,
       where: 'bookId = ?',
       whereArgs: [bookId],
       orderBy: 'chapter_index ASC',
